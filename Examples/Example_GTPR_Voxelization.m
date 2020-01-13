@@ -10,7 +10,7 @@ profile on
 w = warning ('off','all');
 
 %%
-% Plotting stuff
+% Plotting Options
 faceAlphas = [0.1, 0.1, 0.1, 1, 0.3, 0.3, 0.3];
 
 edgeAlphas = [0.1, 0.1, 0.1, 1, 0.3, 0.3, 0.3];
