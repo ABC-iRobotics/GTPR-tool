@@ -75,5 +75,9 @@ function figureHandle = plotVoxelizedSpace(voxelized3DSpace, figureNo, faceAlpha
         PATCH_3Darray(faceAlphas(7), edgeAlphas(7), arm3Common, voxelized3DSpace.grid.x, voxelized3DSpace.grid.y, voxelized3DSpace.grid.z, colors(7,:));
     end
 
+    hold off;
+    xlabel("X");
+    ylabel("Y");
+    zlabel("Z");
 
 end

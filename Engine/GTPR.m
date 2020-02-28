@@ -21,6 +21,17 @@ classdef GTPR < GTPR_Geometry
             
         end
         
+        function discretizedWorkspacePoints = mapWorkSpace2(obj, q)
+            % mapWS is a function basically.
+            qlength = length(q);
+
+            for i = qlength:-1:1
+                data(i) = obj.DirectGeometry(q(qlength+1-i,:));
+            end
+            
+            discretizedWorkspacePoints = data;
+        end
+        
         function discretizedWorkspacePoints = mapWorkSpace(obj, varargin)
             % mapWS is a function basically.
             

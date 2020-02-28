@@ -66,6 +66,9 @@ classdef GTPR_Geometry < handle
         alpha12 = [];
         alpha13 = [];
 
+        % Variables:
+        characteristicPoints
+        
     end 
     
     %%
@@ -130,14 +133,94 @@ classdef GTPR_Geometry < handle
         %##################################################################
         % INVERSE GEOMETRY
         %##################################################################
-        function [q1, q2, q3] = InverseGeometry(~, X, Y, Z)
+        function dataOut = InverseGeometry(obj, TCP, varargin)
             % Calculates the inverse kinematics of the GTPR
-            q1 = X;
-            q2 = Y;
-            q3 = Z;
+            % Input can be given in either 3 arguments (x,y,z) or as one
+            % array containing the coordinates.
             
-			% EMPTY!!!
-
+            % Inverse kinematics starts from here.
+            % Calculate the work triangle edge locations:
+                % 1st:
+            G = TCP - [0 obj.e1 0]';
+            % Use the 2 circle intersection algorithm:
+            l1p = sqrt(power(obj.l1,2) - power(G(1),2));
+            [Dy, Dz] = circcirc(obj.A(2), obj.A(3), obj.L1, G(2), G(3), l1p);
+            
+                % 2nd:
+            % Since coordinates are rotated here, it will be as if it was 
+            % aligned with the zy plane
+            H = TCP - rotz(obj.alpha12)*[0 obj.e2 0]';
+            Hp = rotz(obj.alpha12)'*H;
+            Bp = rotz(obj.alpha12)'*obj.B;
+            l2p = sqrt(power(obj.l2,2) - power(Hp(1),2));
+            [Epy, Epz] = circcirc(Bp(2), Bp(3), obj.L2, Hp(2), Hp(3), l2p);
+            
+                % 3rd:
+            % Since coordinates are rotated here, it will be as if it was 
+            % aligned with the zy plane
+            I = TCP - rotz(obj.alpha13)*[0 obj.e3 0]';
+            Ip = rotz(obj.alpha13)'*I; % Should be around -8 for x
+            Cp = rotz(obj.alpha13)'*obj.C;
+            l3p = sqrt(power(obj.l3,2) - power(Ip(1),2));
+            [Fpy, Fpz] = circcirc(Cp(2), Cp(3), obj.L3, Ip(2), Ip(3), l3p);
+            
+            % Calculate the corresponding joint angles:
+            
+            
+            
+            q1 = atan2d(Dz, Dy-obj.A(2));
+            q2 = atan2d(Epz, Epy-Bp(2));
+            q3 = atan2d(Fpz, Fpy-Cp(2));
+            
+            if Dz(2) > obj.A(3) 
+                q1 = -180+q1;
+            else
+                q1 = 180+q1;
+            end
+            
+            if Epz(2) > obj.B(3)
+                q2 = -180+q2;
+            else
+                q2 = 180+q2;
+            end
+            
+            if Fpz(2) > obj.C(3)
+                q3 = -180+q3;
+            else
+                q3 = 180+q3;
+            end
+            
+            if strcmp(varargin, 'simple')
+				dataOut = [q1 q2 q3];
+				return;
+				
+            else
+                
+                D1 = rotz(0)*[0 Dy(1) Dz(1)]';
+                E1 = rotz(obj.alpha12)*[0 Epy(1) Epz(1)]';
+                F1 = rotz(obj.alpha13)*[0 Fpy(1) Fpz(1)]';
+                
+                D2 = rotz(0)*[0 Dy(2) Dz(2)]';
+                E2 = rotz(obj.alpha12)*[0 Epy(2) Epz(2)]';
+                F2 = rotz(obj.alpha13)*[0 Fpy(2) Fpz(2)]';
+                
+                %%
+                
+                dataOut = struct('TCP', TCP,...
+                                              'q', [q1 q2 q3],...
+                                              'A', obj.A,...
+                                              'B', obj.B,...
+                                              'C', obj.C,...
+                                              'D1', D1,...
+                                              'E1', E1,...
+                                              'F1', F1,...
+                                              'D2', D2,...
+                                              'E2', E2,...
+                                              'F2', F2,...
+                                              'G', G,...
+                                              'H', H,...
+                                              'I', I);
+            end
         end
 
 
@@ -171,12 +254,11 @@ classdef GTPR_Geometry < handle
 			% Using the three spheres intersection algorithm to find the proper TCP:
 			[~, TCP] = threeSpheresIntersection(Dv,Ev,Fv,obj.l1,obj.l2,obj.l3);
             
-			if nargin > 2			
-				if strcmp(varargin{1}, 'simple')
-					characteristicPoints = TCP;
-					return;
-				end
 				
+			if strcmp(varargin, 'simple')
+				characteristicPoints = TCP;
+				return;
+							
 			else
 			%%
 			% Other not "useful" points:
@@ -216,12 +298,95 @@ classdef GTPR_Geometry < handle
                                               'I', I,...
                                               'TCP', TCP);
             end
+            
+            obj.characteristicPoints = characteristicPoints;
 %             if ~isreal(TCP)
 %                 characteristicPoints = struct('complex', characteristicPoints);
 %             end
 			
 			end
         end
+        
+        
+    %%  
+    %######################################################################
+    %           OTHER FUNCTIONS
+    %######################################################################
+    %%    
+        function plotRobot(obj, charPointsFull)
+            
+            hold on;
+            plot3(0,0,0, 'k*');
+            
+            D = charPointsFull.D;
+            E = charPointsFull.E;
+            F = charPointsFull.F;
+            
+            G = charPointsFull.G;
+            H = charPointsFull.H;
+            I = charPointsFull.I;
+            
+            TCP = charPointsFull.TCP;
+            
+            %Base triangle:
+            plot3(obj.A(1), obj.A(2), obj.A(3), 'r*');
+            plot3(obj.B(1), obj.B(2), obj.B(3), 'b*');
+            plot3(obj.C(1), obj.C(2), obj.C(3), 'g*');
+
+            plot3([0 obj.A(1)], [0 obj.A(2)], [0 obj.A(3)], 'k--')
+            plot3([0 obj.B(1)], [0 obj.B(2)], [0 obj.B(3)], 'k--')
+            plot3([0 obj.C(1)], [0 obj.C(2)], [0 obj.C(3)], 'k--')
+
+            % Upper arm:
+            plot3(D(1), D(2), D(3), 'r.');
+            plot3(E(1), E(2), E(3), 'b.');
+            plot3(F(1), F(2), F(3), 'g.');
+
+            plot3([obj.A(1) D(1)], [obj.A(2) D(2)], [obj.A(3) D(3)], 'r');
+            plot3([obj.B(1) E(1)], [obj.B(2) E(2)], [obj.B(3) E(3)], 'b');
+            plot3([obj.C(1) F(1)], [obj.C(2) F(2)], [obj.C(3) F(3)], 'g');
+
+            % Virtual point:
+%             plot3(Dv(1), Dv(2), Dv(3), 'rs');
+%             plot3(Ev(1), Ev(2), Ev(3), 'bs');
+%             plot3(Fv(1), Fv(2), Fv(3), 'gs');
+
+%             plot3([D(1) Dv(1)], [D(2) Dv(2)], [D(3) Dv(3)], 'r:');
+%             plot3([E(1) Ev(1)], [E(2) Ev(2)], [E(3) Ev(3)], 'b:');
+%             plot3([F(1) Fv(1)], [F(2) Fv(2)], [F(3) Fv(3)], 'g:');
+
+            % Work Triangle:
+            plot3(TCP(1), TCP(2), TCP(3), 'ko');
+
+            plot3(G(1), G(2), G(3), 'rx');
+            plot3(H(1), H(2), H(3), 'bx');
+            plot3(I(1), I(2), I(3), 'gx');
+
+            plot3([TCP(1) G(1)], [TCP(2) G(2)], [TCP(3) G(3)], 'r-.')
+            plot3([TCP(1) H(1)], [TCP(2) H(2)], [TCP(3) H(3)], 'b-.')
+            plot3([TCP(1) I(1)], [TCP(2) I(2)], [TCP(3) I(3)], 'g-.')
+
+            % Lower arm:
+
+            plot3([D(1) G(1)], [D(2) G(2)], [D(3) G(3)], 'r--');
+            plot3([E(1) H(1)], [E(2) H(2)], [E(3) H(3)], 'b--');
+            plot3([F(1) I(1)], [F(2) I(2)], [F(3) I(3)], 'g--');
+
+            % Plot the triangles edges:
+            % Base:
+            plot3([obj.A(1) obj.B(1)], [obj.A(2) obj.B(2)], [obj.A(3) obj.B(3)], 'k');
+            plot3([obj.A(1) obj.C(1)], [obj.A(2) obj.C(2)], [obj.A(3) obj.C(3)], 'k');
+            plot3([obj.C(1) obj.B(1)], [obj.C(2) obj.B(2)], [obj.C(3) obj.B(3)], 'k');
+
+            %Work:
+            plot3([G(1) H(1)], [G(2) H(2)], [G(3) H(3)], 'k');
+            plot3([G(1) I(1)], [G(2) I(2)], [G(3) I(3)], 'k');
+            plot3([I(1) H(1)], [I(2) H(2)], [I(3) H(3)], 'k');
+
+            hold off;
+            
+        end
+        
         
     %%
     %######################################################################
@@ -241,29 +406,6 @@ classdef GTPR_Geometry < handle
         
         %##################################################################
         
-        function theta = calcAngleYZ(~, x0, y0, z0, rf, re, R, e)
-        % From: http://forums.trossenrobotics.com/tutorials/introduction-129/delta-robot-kinematics-3276/
-        % For explanation see sample code
-        % rf -> upper arm length
-        % re -> lower arm length
-        % R -> base triangle radius
-        % e -> work triangle radius
-        
-            y1 = -R;
-            y0 = y0-e;
-            a = (x0*x0 + y0*y0 + z0*z0 +rf*rf - re*re - y1*y1)/(2*z0);
-            b = (y1-y0)/z0;
-            % // discriminant
-            d = -(a+b*y1)*(a+b*y1)+rf*(b*b*rf+rf); 
-            yj = (y1 - a*b - sqrt(d))/(b*b + 1); %// choosing outer point
-            zj = a + b*yj;
-            theta = atan(-zj/(y1 - yj));
-            if yj > y1
-                theta = theta + pi;
-            end
-        
-        end
-        
         %##################################################################
         % DIRECT KINEMATICS HELPER FUNCTIONS
         %##################################################################
@@ -273,6 +415,10 @@ classdef GTPR_Geometry < handle
         % HELPER FUNCTIONS
         %##################################################################
 		
+        
+        
+        
+        
         function RobotData = exportRobotData(obj, saveTF_, savename_)
         % Exports robot data to a .mat file
         % Can specify if you wish to export the robot data, or only create
